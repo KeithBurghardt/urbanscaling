@@ -1,0 +1,419 @@
+
+import rasterio
+from rasterio import mask
+import geopandas as gpd
+import pandas as pd
+import os,ast
+from matplotlib import pyplot as plt
+from scipy.stats import spearmanr
+
+
+patches = gpd.read_file('patches_allmsa_merged.shp')
+if not os.path.exists('Baynes2022_pop.csv'):
+    Baynes_pops = {'CBSA':[],'patch_id':[],'pop':[]}
+    with rasterio.open("/Volumes/Keith_Burghardt_EHD/RoadNetworks/dasymetric_us_20160208/dasymetric_us_20160208.tif") as src:
+        city_ids = patches.loc[(patches['year']==2015),'msaid'].drop_duplicates().values
+        for city_id in city_ids:
+            ids = patches.loc[(patches['year']==2015) & (patches['msaid']==city_id),'Id'].drop_duplicates().values
+            for patch_id in ids:
+                patch_shape = patches.loc[(patches['year']==2015) & (patches['msaid']==city_id) & (patches['Id']==patch_id),'geometry']
+                out_image, out_transform = mask.mask(src, patch_shape, crop=True)
+                out_meta = src.meta
+                pop = out_image[out_image>0].sum()
+                Baynes_pops['CBSA'].append(city_id)
+                Baynes_pops['patch_id'].append(patch_id)
+                Baynes_pops['pop'].append(pop)
+    pd.DataFrame(Baynes_pops).to_csv('Baynes2022_pop.csv',index=False)
+
+Baynes_pops = pd.read_csv('Baynes2022_pop.csv')
+temp_completeness = 60
+geo_coverage = 40
+
+combined_patches = pd.read_csv('../road_netw_multitemp_msa_level/allpatches_merged_cbsa.csv')
+print(len(combined_patches.loc[combined_patches['year']==2015,]))
+combine_uids = combined_patches.loc[(combined_patches['year']==2015) ,['patchid_dissolved','uid2_of_dissolved_patches']].values#.values[10].replace(' ',','))
+patch2merge = {}
+for u,l in combine_uids:
+    l = np.array(ast.literal_eval(l.replace(' ',','))).astype(str)
+    for ll in l:
+        patch2merge[ll] = u
+uids2patch = {u:ast.literal_eval(l.replace(' ',',')) for u,l in combine_uids}
+
+
+    
+huang_pops=pd.read_csv('patches_2015_w_huang_popcounts.csv')
+huang_pops.columns=['patch_id','patch_pop']
+area_sums=pd.read_csv('patches_2015_w_msbf_area_sum.csv')
+area_sums.columns=['patch_id','area']
+area_sums['CBSA'] = [patch.split('_')[0] for patch in area_sums['patch_id']]
+area_sums['patch_id'] = [patch.split('_')[-1] for patch in area_sums['patch_id']]
+area_sums = pd.DataFrame(area_sums).astype(int)
+
+msbf_pops = pd.read_csv('patches_2015_w_msbf_pop.csv')
+dev_area_df = pd.read_csv('CityPatchStats/AllNetworkStats_cumulative=True.csv')
+
+dev_area_df=dev_area_df.loc[(dev_area_df['TempComplete']>temp_completeness)&(dev_area_df['GeoComplete']>geo_coverage),]
+labelfonts = {'fontname':'Arial','fontsize':15}
+
+patch_ids=[]
+cbsas=[]
+merged_uids = []
+patch2cbsa = {}
+for n,row in huang_pops.iterrows():
+    uid = row['patch_id']
+    merged_uid = patch2merge[uid]
+    CBSA_patch = uid.split('_')[0]
+    patch_id = uid.split('_')[-1]
+    
+    patch_ids.append(int(float(patch_id)))
+    cbsas.append(int(float(CBSA_patch)))
+    patch2cbsa[int(float(patch_id))] = int(float(CBSA_patch))
+    merged_uids.append(merged_uid)
+huang_pops['patch_id'] = patch_ids
+huang_pops['CBSA'] = cbsas
+huang_pops['merged_patch_id'] = merged_uids
+
+
+Baynes_pops = pd.read_csv('Baynes2022_pop.csv')
+Baynes_cbsa_scaling={'CBSA':[],'CBSA_pop':[]}
+for cbsa in dev_area_df['msaid'].drop_duplicates().values:
+    pop = Baynes_pops.loc[Baynes_pops['CBSA']==cbsa,'pop'].values.sum()
+    Baynes_cbsa_scaling['CBSA'].append(cbsa)
+    Baynes_cbsa_scaling['CBSA_pop'].append(pop)
+Baynes_patch_scaling={'CBSA':[],'patch_id':[],'merged_patch_id':[],'patch_pop':[]}
+for cbsa in dev_area_df['msaid'].drop_duplicates().values:
+    for patch_id in Baynes_pops.loc[(Baynes_pops['CBSA']==cbsa),'patch_id'].drop_duplicates().values:
+        uid = str(cbsa)+'_2015_'+str(patch_id)
+        merged_patch_id = patch2merge[uid]
+
+        Baynes_patch_scaling['merged_patch_id'].append(merged_patch_id)
+        pop = Baynes_pops.loc[(Baynes_pops['CBSA']==cbsa) & (Baynes_pops['patch_id']==patch_id),'pop'].values.sum()
+        Baynes_patch_scaling['CBSA'].append(cbsa)
+        Baynes_patch_scaling['patch_id'].append(patch_id)
+        Baynes_patch_scaling['patch_pop'].append(pop)
+
+Baynes_merged_scaling_temp = pd.DataFrame(Baynes_patch_scaling)
+all_merged_ids = Baynes_merged_scaling_temp['merged_patch_id'].drop_duplicates().values
+Baynes_merged_scaling={c:[] for c in Baynes_merged_scaling_temp.columns}
+for merged_id in all_merged_ids:
+    all_rows = Baynes_merged_scaling_temp.loc[Baynes_merged_scaling_temp['merged_patch_id']==merged_id,]
+    for c in Baynes_merged_scaling.keys():
+        if c == 'merged_patch_id':
+            Baynes_merged_scaling[c].append(merged_id)
+        #if c in ['CBSA','patch_id']:
+        #    Baynes_merged_scaling[c].append(all_rows[c].drop_duplicates().tolist())
+        else:
+            Baynes_merged_scaling[c].append(all_rows[c].values.sum())
+Baynes_merged_scaling = pd.DataFrame(Baynes_merged_scaling)
+
+burghardt_cbsa_scaling={'CBSA':[],'CBSA_pop':[],'CBSA_dev_area':[],'CBSA_footprint_area':[],'CBSA_roadlength':[]}
+for cbsa in dev_area_df['msaid'].drop_duplicates().values:
+    data = dev_area_df.loc[(dev_area_df['msaid']==cbsa)&(dev_area_df['year']==2015),]
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa),'area'].values)
+    dev_area = np.sum(data['area'].values)
+    length = np.sum(data['distance'].values)
+    pop = data['pop'].values[0]
+    all_bupl = data['all_bupl'].values[0]
+    patch_bupl = np.sum(data['patch_bupl'].values)
+    adj_pop = patch_bupl/all_bupl*pop
+    burghardt_cbsa_scaling['CBSA_pop'].append(adj_pop)
+    burghardt_cbsa_scaling['CBSA_dev_area'].append(dev_area)
+    burghardt_cbsa_scaling['CBSA_roadlength'].append(length)
+    burghardt_cbsa_scaling['CBSA_footprint_area'].append(footprint_area)
+    burghardt_cbsa_scaling['CBSA'].append(cbsa)
+    
+burghardt_patch_scaling={'CBSA':[],'patch_id':[],'merged_patch_id':[],'patch_pop':[],'patch_dev_area':[],'patch_footprint_area':[],'patch_roadlength':[]}
+for n,row in dev_area_df.iterrows():
+    year=row['year']
+    if year != 2015: continue
+    cbsa = row['msaid']
+    patch_id=row['id']
+    uid = str(cbsa)+'_2015_'+str(patch_id)
+    merged_patch_id = patch2merge[uid]
+    burghardt_patch_scaling['merged_patch_id'].append(merged_patch_id)
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa) & (area_sums['patch_id']==patch_id),'area'].values)
+    pop=row['pop']
+    all_bupl = row['all_bupl']
+    patch_bupl = row['patch_bupl']
+    adj_pop = patch_bupl/all_bupl*pop
+    dev_area = row['area']
+    length = row['distance']
+    burghardt_patch_scaling['patch_pop'].append(adj_pop)
+    burghardt_patch_scaling['patch_dev_area'].append(dev_area)
+    burghardt_patch_scaling['patch_footprint_area'].append(footprint_area)
+    burghardt_patch_scaling['patch_roadlength'].append(length)
+    burghardt_patch_scaling['CBSA'].append(cbsa)
+    burghardt_patch_scaling['patch_id'].append(patch_id)
+
+burghardt_merged_scaling_temp = pd.DataFrame(burghardt_patch_scaling)
+all_merged_ids = burghardt_merged_scaling_temp['merged_patch_id'].drop_duplicates().values
+burghardt_merged_scaling={c:[] for c in burghardt_merged_scaling_temp.columns}
+for merged_id in all_merged_ids:
+    all_rows = burghardt_merged_scaling_temp.loc[burghardt_merged_scaling_temp['merged_patch_id']==merged_id,]
+    for c in burghardt_merged_scaling.keys():
+        if c == 'merged_patch_id':
+            burghardt_merged_scaling[c].append(merged_id)
+        #if c in ['CBSA','patch_id']:
+        #    burghardt_merged_scaling[c].append(all_rows[c].drop_duplicates().tolist())
+        else:
+            burghardt_merged_scaling[c].append(all_rows[c].values.sum())
+    
+msbf_cbsa_scaling = {'CBSA':[],'CBSA_pop':[],'CBSA_footprint_area':[],'CBSA_dev_area':[]}
+msbf_patch_scaling ={'CBSA':[],'patch_id':[],'merged_patch_id':[],'patch_pop':[],'patch_footprint_area':[],'patch_dev_area':[]}
+
+for cbsa in dev_area_df['msaid'].drop_duplicates().values:
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa),'area'].values)
+    dev_area = np.sum(dev_area_df.loc[(dev_area_df['msaid']==cbsa)&(dev_area_df['year']==2015),'area'].values)
+
+    pop = np.sum(msbf_pops.loc[msbf_pops['CBSA']==cbsa,'patch_pop'].values)
+    msbf_cbsa_scaling['CBSA'].append(cbsa)
+    msbf_cbsa_scaling['CBSA_pop'].append(pop)
+    msbf_cbsa_scaling['CBSA_footprint_area'].append(footprint_area)
+    msbf_cbsa_scaling['CBSA_dev_area'].append(dev_area)
+
+
+
+huang_cbsa_scaling = {'CBSA':[],'CBSA_pop':[],'CBSA_footprint_area':[],'CBSA_dev_area':[]}
+huang_patch_scaling ={'CBSA':[],'patch_id':[],'merged_patch_id':[],'patch_pop':[],'patch_footprint_area':[],'patch_dev_area':[]}
+for cbsa in dev_area_df['msaid'].drop_duplicates().values:
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa),'area'].values)
+    pop = np.sum(huang_pops.loc[huang_pops['CBSA']==cbsa,'patch_pop'].values)
+    dev_area = np.sum(dev_area_df.loc[(dev_area_df['msaid']==cbsa)&(dev_area_df['year']==2015),'area'].values)
+
+    huang_cbsa_scaling['CBSA'].append(cbsa)
+    huang_cbsa_scaling['CBSA_pop'].append(pop)
+    huang_cbsa_scaling['CBSA_footprint_area'].append(footprint_area)
+    huang_cbsa_scaling['CBSA_dev_area'].append(dev_area)
+
+
+
+for n,row in dev_area_df.iterrows():
+    year=row['year']
+    if year != 2015: continue
+    cbsa = row['msaid']
+    patch_id=row['id']
+    uid = str(cbsa)+'_2015_'+str(patch_id)
+    merged_patch_id = patch2merge[uid]
+    msbf_patch_scaling['merged_patch_id'].append(merged_patch_id)
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa) & (area_sums['patch_id']==patch_id),'area'].values)
+    pop = np.sum(msbf_pops.loc[(msbf_pops['CBSA']==cbsa) & (msbf_pops['patch_id']==patch_id),'patch_pop'].values)
+    dev_area = np.sum(dev_area_df.loc[(dev_area_df['msaid']==cbsa)&(dev_area_df['id']==patch_id)&(dev_area_df['year']==2015),'area'].values)
+    msbf_patch_scaling['CBSA'].append(cbsa)
+    msbf_patch_scaling['patch_id'].append(patch_id)
+    msbf_patch_scaling['patch_pop'].append(pop)
+    msbf_patch_scaling['patch_footprint_area'].append(footprint_area)
+    msbf_patch_scaling['patch_dev_area'].append(dev_area)
+    #print([cbsa,area,pop])
+
+msbf_merged_scaling_temp = pd.DataFrame(msbf_patch_scaling)
+all_merged_ids = msbf_merged_scaling_temp['merged_patch_id'].drop_duplicates().values
+msbf_merged_scaling={c:[] for c in msbf_merged_scaling_temp.columns}
+for merged_id in all_merged_ids:
+    all_rows = msbf_merged_scaling_temp.loc[msbf_merged_scaling_temp['merged_patch_id']==merged_id,]
+    for c in msbf_merged_scaling.keys():
+        if c == 'merged_patch_id':
+            msbf_merged_scaling[c].append(merged_id)
+        #if c in ['CBSA','patch_id']:
+        #    msbf_merged_scaling[c].append(all_rows[c].drop_duplicates().tolist())
+        else:
+            msbf_merged_scaling[c].append(all_rows[c].values.sum())
+
+    
+for n,row in dev_area_df.iterrows():
+    year=row['year']
+    if year != 2015: continue
+    cbsa = row['msaid']
+    patch_id=row['id']
+    uid = str(cbsa)+'_2015_'+str(patch_id)
+    footprint_area = np.sum(area_sums.loc[(area_sums['CBSA']==cbsa) & (area_sums['patch_id']==patch_id),'area'].values)
+    pop = np.sum(huang_pops.loc[(huang_pops['CBSA']==cbsa) & (huang_pops['patch_id']==patch_id),'patch_pop'].values)
+    dev_area = np.sum(dev_area_df.loc[(dev_area_df['msaid']==cbsa)&(dev_area_df['id']==patch_id)&(dev_area_df['year']==2015),'area'].values)
+    merged_patch_id = patch2merge[uid]
+    huang_patch_scaling['merged_patch_id'].append(merged_patch_id)
+    huang_patch_scaling['CBSA'].append(cbsa)
+    huang_patch_scaling['patch_id'].append(patch_id)
+    huang_patch_scaling['patch_pop'].append(pop)
+    huang_patch_scaling['patch_footprint_area'].append(footprint_area)
+    huang_patch_scaling['patch_dev_area'].append(dev_area)
+    #print([cbsa,area,pop])
+
+
+huang_merged_scaling_temp = pd.DataFrame(huang_patch_scaling)
+all_merged_ids = huang_merged_scaling_temp['merged_patch_id'].drop_duplicates().values
+huang_merged_scaling={c:[] for c in huang_merged_scaling_temp.columns}
+for merged_id in all_merged_ids:
+    all_rows = huang_merged_scaling_temp.loc[huang_merged_scaling_temp['merged_patch_id']==merged_id,]
+    for c in huang_merged_scaling.keys():
+        if c == 'merged_patch_id':
+            huang_merged_scaling[c].append(merged_id)
+        #if c in ['CBSA','patch_id']:
+        #    huang_merged_scaling[c].append(all_rows[c].drop_duplicates().tolist())
+        else:
+            huang_merged_scaling[c].append(all_rows[c].values.sum())
+huang_merged_scaling = pd.DataFrame(huang_merged_scaling)
+burghardt_merged_scaling = pd.DataFrame(burghardt_merged_scaling)
+msbf_merged_scaling = pd.DataFrame(msbf_merged_scaling)
+Baynes_merged_scaling = pd.merge(Baynes_merged_scaling,huang_merged_scaling[['merged_patch_id','patch_footprint_area','patch_dev_area']],on=['merged_patch_id'])
+
+
+
+plt.style.use('default')
+huang_patch_scaling = pd.DataFrame(huang_patch_scaling)
+burghardt_patch_scaling = pd.DataFrame(burghardt_patch_scaling)
+msbf_patch_scaling = pd.DataFrame(msbf_patch_scaling)
+Baynes_patch_scaling = pd.DataFrame(Baynes_patch_scaling)
+
+huang_cbsa_scaling = pd.DataFrame(huang_cbsa_scaling)
+burghardt_cbsa_scaling = pd.DataFrame(burghardt_cbsa_scaling)
+msbf_cbsa_scaling = pd.DataFrame(msbf_cbsa_scaling)
+Baynes_cbsa_scaling = pd.DataFrame(Baynes_cbsa_scaling)
+
+
+labelfonts = {'fontname':'Arial','fontsize':15}
+
+fig, axes = plt.subplots(3,3,figsize=(12,12))
+
+
+for ii,popy in enumerate([Baynes_cbsa_scaling,huang_cbsa_scaling,msbf_cbsa_scaling]):
+    merged = burghardt_cbsa_scaling.merge(popy,on=['CBSA'])
+    s,p=spearmanr(merged['CBSA_pop_x'],merged['CBSA_pop_y'])
+    axes[0,ii].plot([10**10],[10**5.5],'.',color='w',label='s = '+str(round(s,2)))
+    axes[0,ii].plot(merged['CBSA_pop_x'],merged['CBSA_pop_y'],['o','D','s'][ii],color=['r','g','b'][ii],alpha=0.7)
+
+for ii,popy in enumerate([Baynes_patch_scaling,huang_patch_scaling,msbf_patch_scaling]):
+    merged = burghardt_patch_scaling.merge(popy,on=['CBSA','patch_id'])
+    
+    axes[1,ii].plot(merged['patch_pop_x'],merged['patch_pop_y'],['o','D','s'][ii],color='w',markeredgecolor=['r','g','b'][ii],alpha=0.7)
+    s,p=spearmanr(merged['patch_pop_x'],merged['patch_pop_y'])
+    axes[1,ii].plot([10**10],[10**5.5],'.',color='w',label='s = '+str(round(s,2)))
+for ii,popy in enumerate([Baynes_merged_scaling,huang_merged_scaling,msbf_merged_scaling]):
+    merged = burghardt_merged_scaling.merge(popy,on=['merged_patch_id'])
+    s,p=spearmanr(merged['patch_pop_x'],merged['patch_pop_y'])
+    axes[2,ii].plot([10**10],[10**5.5],'.',color='w',label='s = '+str(round(s,2)))
+    axes[2,ii].plot(merged['patch_pop_x'],merged['patch_pop_y'],['o','D','s'][ii],color='gray',markeredgecolor=['r','g','b'][ii],alpha=0.7)
+
+
+for i in range(3):
+    for j in range(3):
+        
+        axes[i,j].set_xscale('log')
+        axes[i,j].set_yscale('log')
+        axes[i,j].set_xlim([10**4,10**7.5])
+        axes[i,j].set_ylim([10**4,10**7.5])
+        if i == 1:
+            axes[i,j].set_xlim([10**1,10**7])
+            axes[i,j].set_ylim([10**1,10**7])        
+        axes[i,j].plot([1,10**8],[1,10**8],'k--',label='__')
+        axes[i,j].legend(fontsize=15,handletextpad=-2,loc='upper left')
+    type_str = 'DBUA'
+    if i ==1:
+        type_str = 'DBUP'
+    axes[i,0].set_ylabel('Baynes '+type_str+' Pop. Estimate',**labelfonts)
+    axes[i,0].set_xlabel('Our Method',**labelfonts)        
+    axes[i,1].set_ylabel('Huang '+type_str+' Pop. Estimate',**labelfonts)
+    axes[i,1].set_xlabel('Our Method',**labelfonts)
+
+    axes[i,2].set_ylabel('Building Area Pop. '+type_str+' Estimate',**labelfonts)
+    axes[i,2].set_xlabel('Our Method',**labelfonts)
+
+plt.tight_layout()
+plt.savefig('PopCompare_'+str(temp_completeness)+str(geo_coverage)+'.png',dpi=140)
+plt.show()
+
+
+huang_patch_scaling = pd.DataFrame(huang_patch_scaling)
+burghardt_patch_scaling = pd.DataFrame(burghardt_patch_scaling)
+msbf_patch_scaling = pd.DataFrame(msbf_patch_scaling)
+Baynes_patch_scaling = pd.DataFrame(Baynes_patch_scaling)
+
+huang_cbsa_scaling = pd.DataFrame(huang_cbsa_scaling)
+burghardt_cbsa_scaling = pd.DataFrame(burghardt_cbsa_scaling)
+msbf_cbsa_scaling = pd.DataFrame(msbf_cbsa_scaling)
+Baynes_cbsa_scaling = pd.DataFrame(Baynes_cbsa_scaling)
+
+plt.rcParams['font.size']=15
+plt.rcParams['font.family']='Arial'
+fig, axes = plt.subplots(1,3,figsize=(12,6))
+for ii,popy in enumerate([burghardt_cbsa_scaling,Baynes_cbsa_scaling,huang_cbsa_scaling,msbf_cbsa_scaling]):
+    merged = burghardt_cbsa_scaling.merge(popy,on=['CBSA'])
+    merged = merged.rename(columns={'CBSA_dev_area_x':'CBSA_dev_area'})
+    print(len(merged))
+    axes[0].plot(merged['CBSA_pop_y'],merged['CBSA_dev_area'],['x','o','D','s'][ii],color=['k','r','g','b'][ii],alpha=0.5,label=['Our Method','Baynes et al.','Huang et al.','Building Area'][ii])
+for ii,popy in enumerate([burghardt_cbsa_scaling,Baynes_cbsa_scaling,huang_cbsa_scaling,msbf_cbsa_scaling]):
+    merged = burghardt_cbsa_scaling.merge(popy,on=['CBSA'])
+    merged = merged.rename(columns={'CBSA_dev_area_x':'CBSA_dev_area'})
+    merged = merged.dropna()
+    merged = merged.loc[(merged['CBSA_pop_y']>0) & merged['CBSA_dev_area']>0,]
+    popt,pcov=curve_fit(fit,np.log(merged['CBSA_pop_y']),np.log(merged['CBSA_dev_area']),p0=(0.0,0.0)) 
+    a=popt[0]; 
+    err_a=np.sqrt(pcov[0,0])
+    b=popt[1]; 
+    err_b=np.sqrt(pcov[1,1])
+    print([a,err_a])
+    x=np.array([1,10**8])
+    axes[0].plot(x,x**a*np.exp(b),'-',color=['k','r','g','b'][ii])
+for ii,popy in enumerate([burghardt_patch_scaling,Baynes_patch_scaling,huang_patch_scaling,msbf_patch_scaling]):
+    merged = burghardt_patch_scaling.merge(popy,on=['CBSA','patch_id'])
+    merged = merged.rename(columns={'patch_dev_area_x':'patch_dev_area'})
+    print(len(merged))
+    axes[1].plot(merged['patch_pop_y'],merged['patch_dev_area'],['+','o','D','s'][ii],color='w',markeredgecolor=['k','r','g','b'][ii],alpha=0.5,label=['Our Method','Baynes et al.','Huang et al.','Building Area'][ii])
+for ii,popy in enumerate([burghardt_merged_scaling,Baynes_merged_scaling,huang_merged_scaling,msbf_merged_scaling]):
+    merged = burghardt_merged_scaling.merge(popy,on=['CBSA','patch_id'])
+    merged = merged.rename(columns={'patch_dev_area_x':'patch_dev_area'})
+    print(len(merged))
+    axes[2].plot(merged['patch_pop_y'],merged['patch_dev_area'],['+','o','D','s'][ii],color='gray',markeredgecolor=['k','r','g','b'][ii],alpha=0.5,label=['Our Method','Baynes et al.','Huang et al.','Building Area'][ii])
+for ii,popy in enumerate([burghardt_patch_scaling,Baynes_patch_scaling,huang_patch_scaling,msbf_patch_scaling]):
+    merged = burghardt_patch_scaling.merge(popy,on=['CBSA','patch_id'])
+    merged = merged.rename(columns={'patch_dev_area_x':'patch_dev_area'})   
+    merged = merged.dropna()
+    merged = merged.loc[(merged['patch_pop_y']>0) & merged['patch_dev_area']>0,]
+    popt,pcov=curve_fit(fit,np.log(merged['patch_pop_y']),np.log(merged['patch_dev_area']),p0=(0.0,0.0)) 
+    x=np.array([1,10**8])
+    a=popt[0]; 
+    err_a=np.sqrt(pcov[0,0])
+    b=popt[1]; 
+    err_b=np.sqrt(pcov[1,1])
+    print([a,err_a])
+    axes[1].plot(x,x**a*np.exp(b),'-',color=['k','r','g','b'][ii])
+print('\nmerged\n')
+for ii,popy in enumerate([burghardt_merged_scaling,Baynes_merged_scaling,huang_merged_scaling,msbf_merged_scaling]):
+    merged = burghardt_merged_scaling.merge(popy,on=['merged_patch_id'])
+    
+    merged = merged.rename(columns={'patch_dev_area_x':'patch_dev_area'})   
+    merged = merged.dropna()
+    merged = merged.loc[(merged['patch_pop_y']>0) & merged['patch_dev_area']>0,]
+    popt,pcov=curve_fit(fit,np.log(merged['patch_pop_y']),np.log(merged['patch_dev_area']),p0=(0.0,0.0)) 
+    x=np.array([1,10**8])
+    a=popt[0]; 
+    err_a=np.sqrt(pcov[0,0])
+    b=popt[1]; 
+    err_b=np.sqrt(pcov[1,1])
+    print([a,err_a])
+    axes[2].plot(x,x**a*np.exp(b),'-',color=['k','r','g','b'][ii])
+for j in range(3):
+    axes[j].plot([1,10**8],[1000,10**11],'k--',label='Linear')
+
+#axes[0].plot(x,x**BCS_f[0]*np.exp(BCS_f[1]),'-',color=scalarMap.to_rgba(2015))
+#p6,=axes[0].plot(x,x**MSBFCS_f[0]*np.exp(MSBFCS_f[1]),'k-')
+#p7,=axes[0].plot(x,x**HCS_f[0]*np.exp(HCS_f[1]),'r-')
+
+axes[0].set_xlim([10**4,10**8])
+axes[0].set_ylim([10**8,10**10.5])
+for j in range(1,3):
+    axes[j].set_xlim([10**1,10**8])
+    axes[j].set_ylim([10**6,10**10.5])
+axes[0].set_ylabel('Developed Area ($m^2$)',**labelfonts)
+axes[1].set_xlabel('Population',**labelfonts)
+#axes[0,1].set_ylabel('Footprint Area ($m^2$)',**labelfonts)
+#axes[0,1].set_xlabel('Population',**labelfonts)
+
+
+for j in range(3):
+    axes[j].set_xscale('log')
+    axes[j].set_yscale('log')
+    axes[j].legend(fontsize=12)
+
+
+plt.tight_layout()
+plt.savefig('ExScaling.png',dpi=150,transparent=True)
+plt.show()
