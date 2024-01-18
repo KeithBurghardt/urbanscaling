@@ -12,6 +12,7 @@ To reproduce results, after extracting all data referenced in the manuscript:
 - Compile files into one larger file and add indoor area (BUI) statistics with FullStats.py
 - Extract CIUP statistics and incorporate BUFA statistics with extract_CIUP_BUFA.py
 - Finally extract all scaling statistics using the Global Human Settlement Layer with WorldScaling.py. This file namely utilizes statistics extracted by Boeing, 2020*
+- Create generalized urban areas for a range of parameters, in order to assess the sensitivity of scaling laws to the choice of urban boundary modeling parameters (urban_boundary_modeling_sensitivity.py)
 
 Data:
 - Auxilary data: https://github.com/johannesuhl/USRoadNetworkEvolution/tree/main/auxiliary_data
