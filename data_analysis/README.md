@@ -12,3 +12,8 @@ We calculated the scaling laws for variations in how patches are defined (see pa
 ## find_bufa_bui.py
 
 Finds the total BUFA (footprint area) or BUI (indoor area) to calculate dasymetricly refined populations at GBUA or CBSA level.
+
+
+## nl_fit.r
+
+R code to calculate the non-linear fit of our data (y = A*P^B, where y is a statistic, such as indoor area, and P is population. A, and B are fitting parameters)
