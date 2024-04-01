@@ -11,7 +11,7 @@ def rescale_vals(df):
     df['geometry'] =  df['geometry'].centroid    
     return df
 
-years = [1980]#[2010]#list(range(1900,2020,10))+[2015]
+years = list(range(1900,2020,10))+[2015]
 for year in years:
     print(year)
     bufa = gpd.read_file('/Volumes/Keith_Burghardt_EHD/RoadNetworks/bufa/hisdac_us_bufa_'+str(year)+'.shp')
