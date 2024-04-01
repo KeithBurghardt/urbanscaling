@@ -1,8 +1,8 @@
 # Urban Scaling Code
-Code for "City definition affects long-term urban scaling analyses in the United States (1900 - 2015)"
+Code for "Analyzing urban scaling laws in the United States over 115 years"
 
 Citation:
-Keith Burghardt, Johannes H. Uhl, Kristina Lerman, Stefan Leyk. (2022). City definition affects long-term urban scaling analyses in the United States (1900-2015). arXiv preprint arXiv:2209.10852.
+Keith Burghardt, Johannes H. Uhl, Kristina Lerman, Stefan Leyk. (2022). Analyzing urban scaling laws in the United States over 115 years. Environment and Planning B: Urban Analytics and City Science (in press)
 
 
 
