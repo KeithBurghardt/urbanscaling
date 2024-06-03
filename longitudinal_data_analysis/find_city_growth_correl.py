@@ -14,47 +14,47 @@ df=pd.read_csv('CityStats/AllNetworkStats_cumulative='+str(cumul)+'.csv')#True.c
 df = pd.merge(left=df,right=footprint_area,left_on=['msaid','year'],right_on=['cbsa','year'],how='left')
 temp_complete = 60
 geo_coverage = 40
-for temp_complete,geo_coverage in [[80,80],[0,0],[40,60]]:
-    df=df.loc[(df['TempComplete']>temp_complete)&(df['GeoComplete']>geo_coverage),]
+for temp_complete,geo_coverage in [[0,0],[40,60],[80,80]]:
+    df2=df.loc[(df['TempComplete']>temp_complete)&(df['GeoComplete']>geo_coverage),]
     # add msaid to name conversion
     PopPerCounty = pd.read_csv('state_pops/all_county_census_MSA_full.csv')
     select_cities = PopPerCounty.loc[PopPerCounty['POPESTIMATE2015']>3*10**5,'CBSA Code'].drop_duplicates().values
     CBSA_Names=PopPerCounty[['CBSA Code','CBSA Title']].dropna().drop_duplicates()
-    df['msa_name'] = [CBSA_Names.loc[CBSA_Names['CBSA Code']==city_id,'CBSA Title'].values[0] for city_id in df['msaid'].values]
+    df2['msa_name'] = [CBSA_Names.loc[CBSA_Names['CBSA Code']==city_id,'CBSA Title'].values[0] for city_id in df2['msaid'].values]
 
     ### specify relevant columns for t-SNE transform:
     #'area','distance','BUIs','BUFA','adj_pop'
-    df['adj_pop'] = df['pop'].values*df['patch_bupl'].values/df['all_bupl'].values
+    df2['adj_pop'] = df2['pop'].values*df2['patch_bupl'].values/df2['all_bupl'].values
 
     relcols=['area','distance','BUIs','bufasum','adj_pop','num_nodes_per_area','num_edges_per_area','distance_per_area','k_mean','k1','k4plus','entropy','mean_local_gridness','mean_local_gridness_max']
     years= list(range(1900,2020,10))+[2015]
     for feature in []:#'bufasum','area','distance','BUIs']:
         diff_feature = []
-        for f,cbsa,y in df[[feature,'msaid','year']].values:
+        for f,cbsa,y in df2[[feature,'msaid','year']].values:
             if y == 1900:
                 diff_feature.append(np.nan)
                 continue
             year_pos = years.index(y)
-            prev_year_f = df.loc[(df['msaid']==cbsa) & (df['year']==years[year_pos-1]),feature]
+            prev_year_f = df2.loc[(df2['msaid']==cbsa) & (df2['year']==years[year_pos-1]),feature]
             if len(prev_year_f) == 0:
                 diff_feature.append(np.nan)
                 continue
             diff = f - prev_year_f.values[0]
             diff_feature.append(diff)
-        df['diff_'+feature] = diff_feature
+        df2['diff_'+feature] = diff_feature
     relcols+=['pop']
 
-    df['SA Type'] = df['MSA'].replace(0, 'uSA').replace(1,'MSA')
-    df['Region'] = df['region'].replace(1, 'NE').replace(2,'Midwest').replace(3,'South').replace(4,'West')
-    df['num_nodes_per_area']=df['num_nodes'].values/df['area'].values*10**6
-    df['num_edges_per_area']=df['num_edges'].values/df['area'].values*10**6
-    df['distance_per_area']=df['distance'].values/df['area'].values*10**6
-    df=df[['msaid','msa_name','year','MSA','SA Type','Region']+relcols]
+    df2['SA Type'] = df2['MSA'].replace(0, 'uSA').replace(1,'MSA')
+    df2['Region'] = df2['region'].replace(1, 'NE').replace(2,'Midwest').replace(3,'South').replace(4,'West')
+    df2['num_nodes_per_area']=df2['num_nodes'].values/df2['area'].values*10**6
+    df2['num_edges_per_area']=df2['num_edges'].values/df2['area'].values*10**6
+    df2['distance_per_area']=df2['distance'].values/df2['area'].values*10**6
+    df2=df2[['msaid','msa_name','year','MSA','SA Type','Region']+relcols]
     ##### 
     # find patterns over time
     for msa in [-1]:#,0,1]:
         #df2 = df.loc[df['year']==years[yy],]
-        df3 = df.copy(deep=True)#loc[df['year']==years[yy],]
+        df3 = df2.copy(deep=True)
         if msa >= 0:
             df3 = df3.loc[(df3['MSA']==msa),]
         coord_file = 'msa_centroids_MSA='+str(msa)+'.pkl'
