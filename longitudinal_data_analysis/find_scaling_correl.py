@@ -52,7 +52,7 @@ for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
         #df2 = df.loc[df['year']==years[yy],]
         df3 = df_trend_temp.copy(deep=True)
         if msa >= 0:
-            df3 = df3.loc[(df3['MSA']==msa),]
+            df3 = df3.loc[(df3['MSA']==['uSA','MSA'][msa]),]
         coord_file = 'msa_centroids_MSA='+str(msa)+'.pkl'
         msa_coordinates=pk.load(open(coord_file,'rb'))
         msaid_df3 = df3.groupby('msaid')
