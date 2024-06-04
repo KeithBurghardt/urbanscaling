@@ -12,7 +12,7 @@ footprint_area = pd.read_csv(footprint_area_file)
 
 df=pd.read_csv('CityStats/AllNetworkStats_cumulative='+str(cumul)+'.csv')#True.csv')
 df = pd.merge(left=df,right=footprint_area,left_on=['msaid','year'],right_on=['cbsa','year'],how='left')
-for temp_complete,geo_coverage in [[0,0],[60,40],[80,80]]:
+for temp_complete,geo_coverage in [[0,0],[40,60],[80,80]]:
     df2=df.loc[(df['TempComplete']>temp_complete)&(df['GeoComplete']>geo_coverage),]
     # add msaid to name conversion
     PopPerCounty = pd.read_csv('state_pops/all_county_census_MSA_full.csv')
@@ -23,9 +23,10 @@ for temp_complete,geo_coverage in [[0,0],[60,40],[80,80]]:
     #'area','distance','BUIs','BUFA','adj_pop'
     df2['adj_pop'] = df2['pop'].values*df2['patch_bupl'].values/df2['all_bupl'].values
 
-    relcols=['area','distance','BUIs','bufasum','adj_pop','num_nodes_per_area','num_edges_per_area','distance_per_area','k_mean','k1','k4plus','entropy','mean_local_gridness','mean_local_gridness_max']
+    relcols=['area','distance','BUIs','diff_bufasum','adj_pop','num_nodes_per_area','num_edges_per_area','distance_per_area','k_mean','k1','k4plus','entropy','mean_local_gridness','mean_local_gridness_max']
     years= list(range(1900,2020,10))+[2015]
-    for feature in []:#'bufasum','area','distance','BUIs']:
+    # we get this data as a cumulative sum; we are converting this back to a decade-by-decade difference
+    for feature in ['bufasum']:
         diff_feature = []
         for f,cbsa,y in df2[[feature,'msaid','year']].values:
             if y == 1900:
@@ -49,7 +50,7 @@ for temp_complete,geo_coverage in [[0,0],[60,40],[80,80]]:
     df2=df2[['msaid','msa_name','year','MSA','SA Type','Region']+relcols]
     ##### 
     # find patterns over time
-    for msa in [-1]:#,0,1]:
+    for msa in [-1,0,1]:
         #df2 = df.loc[df['year']==years[yy],]
         df3 = df2.copy(deep=True)
         if msa >= 0:
@@ -57,18 +58,19 @@ for temp_complete,geo_coverage in [[0,0],[60,40],[80,80]]:
         coord_file = 'msa_centroids_MSA='+str(msa)+'.pkl'
         msa_coordinates=pk.load(open(coord_file,'rb'))
         msaid_df3 = df3.groupby('msaid')
-        for col in relcols:#[relcols[14]]:
+        for col in [relcols[3]]:
             correl_file = col+'_spatial_correl_msa='+str(msa)+'_temp='+str(temp_complete)+'_geo='+str(geo_coverage)+'_allyears_diff.csv'
             data_correl={'distance':[],'origin':[],'destination':[]}
             # find central coordinates for each msa
             val_coordinates=[]
-
+            all_msaids = set()
             for n,line in df3.iterrows():
                 msaid=line['msaid']
                 diff = msaid_df3.get_group(msaid)[[col,'year']].sort_values(by='year')
                 diff = diff[col].values
-                if msaid in msa_coordinates.keys():
+                if msaid in msa_coordinates.keys() and msaid not in all_msaids:
                     val_coordinates.append([diff,msa_coordinates[msaid]])
+                    all_msaids.add(msaid)
             dist_vals=[]
             for ii,vc in enumerate(val_coordinates):
                 if ii % 100 == 0:
@@ -84,12 +86,15 @@ for temp_complete,geo_coverage in [[0,0],[60,40],[80,80]]:
                         # - all data is complete after min_year
                         # - all np.nan is for the first or last few years (there is no gap/missing decade)
                         valid_val2 = val2[-shortest_len:]
-                        valid_val2 = valid_val2[~np.isnan(val2[-shortest_len:]) & ~np.isnan(val[-shortest_len:])]
+                        # normalize
+                        norm_mean = np.mean(valid_val2[~np.isnan(val2[-shortest_len:]) & ~np.isnan(val[-shortest_len:])])
+                        valid_val2 = list(valid_val2[~np.isnan(val2[-shortest_len:]) & ~np.isnan(val[-shortest_len:])]/norm_mean)
                         valid_val = val[-shortest_len:]
-                        valid_val = valid_val[~np.isnan(val2[-shortest_len:]) & ~np.isnan(val[-shortest_len:])]
+                        valid_val = list(valid_val[~np.isnan(val2[-shortest_len:]) & ~np.isnan(val[-shortest_len:])]/norm_mean)
                         distance = geodesic(tuple(coord),tuple(coord2)).km
                         data_correl['distance'].append(distance)
                         data_correl['origin'].append(valid_val)
                         data_correl['destination'].append(valid_val2)
             data_correl = pd.DataFrame(data_correl)
+            print(len(data_correl))
             data_correl.to_csv(correl_file,index=False)

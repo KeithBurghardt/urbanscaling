@@ -22,7 +22,7 @@ for col in ['GeoComplete','TempComplete','SA Type','Region']:
     df_trend[col] = [df.loc[df['msaid']==row['msaid'],col].iloc[0] for n,row in df_trend.iterrows()]
 
 
-for temp_complete,geo_coverage in [[0,0]]:#[[0,0],[80,80]]:
+for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
     df2=df.loc[(df['TempComplete']>temp_complete)&(df['GeoComplete']>geo_coverage),]
     df_trend_temp=df_trend.loc[(df_trend['TempComplete']>temp_complete)&(df_trend['GeoComplete']>geo_coverage),]
     df_trend_temp['pop'] = [msa2pop[msa] for msa in df_trend_temp['msaid'].values]
@@ -36,7 +36,8 @@ for temp_complete,geo_coverage in [[0,0]]:#[[0,0],[80,80]]:
     ### specify relevant columns for t-SNE transform:
     #'area','dist','BUIs','BUFA','adj_pop'
     df2['adj_pop'] = df2['pop'].values*df2['patch_bupl'].values/df2['all_bupl'].values
-    df_trend_temp['adj_pop'] = [df2.loc[df2['msaid']==row['msaid'],col].iloc[0] for n,row in df_trend_temp.iterrows()]
+    df_trend_temp['adj_pop'] = [df2.loc[(df2['msaid']==row['msaid']) & (df2['year']==2015),'adj_pop'].iloc[0] for n,row in df_trend_temp.iterrows()]
+    print(df_trend_temp)
     relcols=['bui','bufasum','area','dist','adj_pop']
 
     #df2['SA Type'] = df2['MSA'].replace(0, 'uSA').replace(1,'MSA')
@@ -47,7 +48,7 @@ for temp_complete,geo_coverage in [[0,0]]:#[[0,0],[80,80]]:
     #df2=df2[['msaid','msa_name','year','MSA','SA Type','Region']+relcols]
     ##### 
     # find patterns over time
-    for msa in [-1]:#,0,1]:
+    for msa in [-1,0,1]:
         #df2 = df.loc[df['year']==years[yy],]
         df3 = df_trend_temp.copy(deep=True)
         if msa >= 0:
@@ -60,16 +61,15 @@ for temp_complete,geo_coverage in [[0,0]]:#[[0,0],[80,80]]:
             data_correl={'distance':[],'origin':[],'destination':[]}
             # find central coordinates for each msa
             val_coordinates=[]
-            all_msaids = set()
+
             for n,line in df3.iterrows():
                 msaid=line['msaid']
                 if col != 'adj_pop':
                     diff = msaid_df3.get_group(msaid)[col+'_a'].values
                 else:
                     diff = msaid_df3.get_group(msaid)[col].values
-                if msaid in msa_coordinates.keys() and msaid not in all_msaids:
+                if msaid in msa_coordinates.keys():
                     val_coordinates.append([diff,msa_coordinates[msaid]])
-                    all_msaids.add(msaid)
             dist_vals=[]
             for ii,vc in enumerate(val_coordinates):
                 if ii % 100 == 0:
