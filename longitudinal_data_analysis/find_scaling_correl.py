@@ -60,15 +60,16 @@ for temp_complete,geo_coverage in [[0,0]]:#[[0,0],[80,80]]:
             data_correl={'distance':[],'origin':[],'destination':[]}
             # find central coordinates for each msa
             val_coordinates=[]
-
+            all_msaids = set()
             for n,line in df3.iterrows():
                 msaid=line['msaid']
                 if col != 'adj_pop':
                     diff = msaid_df3.get_group(msaid)[col+'_a'].values
                 else:
                     diff = msaid_df3.get_group(msaid)[col].values
-                if msaid in msa_coordinates.keys():
+                if msaid in msa_coordinates.keys() and msaid not in all_msaids:
                     val_coordinates.append([diff,msa_coordinates[msaid]])
+                    all_msaids.add(msaid)
             dist_vals=[]
             for ii,vc in enumerate(val_coordinates):
                 if ii % 100 == 0:
