@@ -3,9 +3,9 @@
 
 We show code to reproduce "Universal Properties in the Urban Growth of Infrastrcture" 
 - find_centroids.py: given the shapefiles of each patch within each CBSA, find the centoid across all patches
-- find_scaling...
-- find_city_grow...
--full_data_stats.csv:
+- find_scaling_correl.py: calculate the correlations between city scaling exponents
+- find_city_growth_correl.py:: calculate the correlations of city growth
+- full_data_stats.csv:
     - msaid: CBSA ID from the US Census 2010 (static)
     - year: reconstructed infrastructure of built up areas up to this year
     - pop: raw population across CBSA
