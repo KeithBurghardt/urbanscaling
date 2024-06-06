@@ -22,7 +22,7 @@ for col in ['GeoComplete','TempComplete','SA Type','Region']:
     df_trend[col] = [df.loc[df['msaid']==row['msaid'],col].iloc[0] for n,row in df_trend.iterrows()]
 
 
-for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
+for temp_complete,geo_coverage in [[60,40],[0,0],[80,80]]:
     df2=df.loc[(df['TempComplete']>temp_complete)&(df['GeoComplete']>geo_coverage),]
     df_trend_temp=df_trend.loc[(df_trend['TempComplete']>temp_complete)&(df_trend['GeoComplete']>geo_coverage),]
     df_trend_temp['pop'] = [msa2pop[msa] for msa in df_trend_temp['msaid'].values]
@@ -48,15 +48,15 @@ for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
     #df2=df2[['msaid','msa_name','year','MSA','SA Type','Region']+relcols]
     ##### 
     # find patterns over time
-    for msa in [-1,0,1]:
+    for msa in [0,1,-1]:
         #df2 = df.loc[df['year']==years[yy],]
         df3 = df_trend_temp.copy(deep=True)
         if msa >= 0:
-            df3 = df3.loc[(df3['MSA']==['uSA','MSA'][msa]),]
+            df3 = df3.loc[(df3['SA Type']==['uSA','MSA'][msa]),]
         coord_file = 'msa_centroids_MSA='+str(msa)+'.pkl'
         msa_coordinates=pk.load(open(coord_file,'rb'))
         msaid_df3 = df3.groupby('msaid')
-        for col in relcols:#[relcols[14]]:
+        for col in relcols:
             correl_file = col+'_spatial_correl_msa='+str(msa)+'_temp='+str(temp_complete)+'_geo='+str(geo_coverage)+'_scaling.csv'
             data_correl={'distance':[],'origin':[],'destination':[]}
             # find central coordinates for each msa
@@ -77,9 +77,12 @@ for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
                 for jj,vc2 in enumerate(val_coordinates):
                     if ii>jj:
                         val2,coord2 = vc2
-                        coord2 = list(coord2.values[0].coords)[0][::-1]
+                        coord2 = [coord2.y,coord2.x]                        
+
+                        #coord2 = list(coord2.values[0].coords)[0][::-1]
                         val,coord = vc
-                        coord = list(coord.values[0].coords)[0][::-1]
+                        coord = [coord.y,coord.x]                        
+                        #coord = list(coord.values[0].coords)[0][::-1]
                         #shortest_len = min([len(val),len(val2)])
                         # assumptions: 
                         # - all data is complete after min_year
@@ -93,4 +96,5 @@ for temp_complete,geo_coverage in [[60,40]]:#[[0,0],[80,80]]:
                         data_correl['origin'].append(valid_val)
                         data_correl['destination'].append(valid_val2)
             data_correl = pd.DataFrame(data_correl)
+            print([correl_file,len(data_correl)])
             data_correl.to_csv(correl_file,index=False)

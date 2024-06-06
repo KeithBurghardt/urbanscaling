@@ -58,7 +58,7 @@ for temp_complete,geo_coverage in [[0,0],[40,60],[80,80]]:
         coord_file = 'msa_centroids_MSA='+str(msa)+'.pkl'
         msa_coordinates=pk.load(open(coord_file,'rb'))
         msaid_df3 = df3.groupby('msaid')
-        for col in [relcols[3]]:
+        for col in relcols:
             correl_file = col+'_spatial_correl_msa='+str(msa)+'_temp='+str(temp_complete)+'_geo='+str(geo_coverage)+'_allyears_diff.csv'
             data_correl={'distance':[],'origin':[],'destination':[]}
             # find central coordinates for each msa
@@ -78,9 +78,11 @@ for temp_complete,geo_coverage in [[0,0],[40,60],[80,80]]:
                 for jj,vc2 in enumerate(val_coordinates):
                     if ii>jj:
                         val2,coord2 = vc2
-                        coord2 = list(coord2.values[0].coords)[0][::-1]
+                        coord = [coord2.y,coord2.x]
+                        #coord2 = list(coord2.values[0].coords)[0][::-1]
                         val,coord = vc
-                        coord = list(coord.values[0].coords)[0][::-1]
+                        coord = [coord.y,coord.x]
+                        #coord = list(coord.values[0].coords)[0][::-1]
                         shortest_len = min([len(val),len(val2)])
                         # assumptions: 
                         # - all data is complete after min_year
