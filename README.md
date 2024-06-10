@@ -2,7 +2,7 @@
 Code for "Analyzing urban scaling laws in the United States over 115 years"
 
 Citation:
-Keith Burghardt, Johannes H. Uhl, Kristina Lerman, Stefan Leyk. (2022). Analyzing urban scaling laws in the United States over 115 years. Environment and Planning B: Urban Analytics and City Science (in press)
+Keith Burghardt, Johannes H. Uhl, Kristina Lerman, Stefan Leyk. (2024). Analyzing urban scaling laws in the United States over 115 years. Environment and Planning B: Urban Analytics and City Science. Environment and Planning B: Urban Analytics and City Science 0(0). DOI:10.1177/23998083241240099
 
 
 
